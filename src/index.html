@@ -1,17 +1,139 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
-  <title>Vanilla JavaScript App</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Renee was here</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1a1f8f; --pink:#ff6fb5; --lilac:#c9b6ff; --paper:#fff7ec; --sun:#ffd84d;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  height:100%;margin:0;overflow:hidden;
+  background:var(--bg);color:var(--paper);
+  font-family:"Bricolage Grotesque",system-ui,sans-serif;
+}
+main{position:relative;height:100%}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.foot{
+  position:absolute;left:0;right:0;bottom:18px;padding:0 20px;
+  text-align:center;font-size:clamp(15px,2.2vw,20px);line-height:1.4;
+  pointer-events:none;
+}
+.foot b{font-weight:800;color:var(--sun)}
+.foot span{display:block;margin-top:4px;font-size:.8em;color:var(--lilac)}
+</style>
 </head>
-
 <body>
-  <main>
-    <h1>HOLA MUNDO, RENEE WAS HERE HELL YEAH</h1>
-  </main>
-</body>
+<main>
+  <h1>HOLA MUNDO, RENEE WAS HERE HELL YEAH</h1>
+  <canvas id="c" aria-hidden="true"></canvas>
+  <p class="foot"><b>Hola mundo, hell yeah.</b><span>Mueve el cursor sobre las letras. Haz clic para explotarlas.</span></p>
+</main>
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const COLORS = ['#ff6fb5', '#c9b6ff', '#fff7ec', '#ffd84d'];
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W, H, dpr, G = [[], [], [], []], mx = -1e4, my = -1e4, t = 0;
 
+function build() {
+  dpr = Math.min(devicePixelRatio || 1, 2);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const o = off.getContext('2d');
+  const lines = W < 600 ? ['RENEE', 'WAS', 'HERE'] : ['RENEE', 'WAS HERE'];
+  const face = '"Bricolage Grotesque", Impact, sans-serif';
+
+  o.font = `800 100px ${face}`;
+  const maxw = Math.max(...lines.map(l => o.measureText(l).width));
+  const fs = Math.min(W * 0.88 / maxw * 100, (H * 0.68) / (lines.length * 0.95));
+
+  o.font = `800 ${fs}px ${face}`;
+  o.fillStyle = '#000'; o.textAlign = 'center'; o.textBaseline = 'middle';
+  const lh = fs * 0.95, top = H * 0.46 - (lh * (lines.length - 1)) / 2;
+  lines.forEach((l, i) => o.fillText(l, W / 2, top + i * lh));
+
+  const px = o.getImageData(0, 0, W, H).data;
+  const gap = Math.max(3, Math.round(fs / 28));
+  G = [[], [], [], []];
+  for (let y = 0; y < H; y += gap) {
+    for (let x = 0; x < W; x += gap) {
+      if (px[(y * W + x) * 4 + 3] > 128) {
+        const k = Math.floor(Math.random() * 4);
+        G[k].push({
+          x: reduce ? x : Math.random() * W,
+          y: reduce ? y : Math.random() * H,
+          ox: x, oy: y, vx: 0, vy: 0,
+          r: gap * 0.42, s: Math.random() * 6.28
+        });
+      }
+    }
+  }
+}
+
+function tick() {
+  t += 0.02;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const R = 110;
+  for (let k = 0; k < 4; k++) {
+    const arr = G[k];
+    for (const p of arr) {
+      const tx = p.ox + (reduce ? 0 : Math.sin(t + p.s) * 1.3);
+      const ty = p.oy + (reduce ? 0 : Math.cos(t * 1.2 + p.s) * 1.3);
+      const dx = p.x - mx, dy = p.y - my, d = dx * dx + dy * dy;
+      if (d < R * R && d > 0.01) {
+        const r = Math.sqrt(d), f = (1 - r / R) * 1.8;
+        p.vx += dx / r * f; p.vy += dy / r * f;
+      }
+      p.vx += (tx - p.x) * 0.035; p.vy += (ty - p.y) * 0.035;
+      p.vx *= 0.88; p.vy *= 0.88;
+      p.x += p.vx; p.y += p.vy;
+    }
+    ctx.fillStyle = COLORS[k];
+    ctx.beginPath();
+    for (const p of arr) { ctx.moveTo(p.x + p.r, p.y); ctx.arc(p.x, p.y, p.r, 0, 6.283); }
+    ctx.fill();
+  }
+  requestAnimationFrame(tick);
+}
+
+function pos(e) {
+  const b = cv.getBoundingClientRect();
+  return [e.clientX - b.left, e.clientY - b.top];
+}
+if (!reduce) {
+  cv.addEventListener('pointermove', e => { [mx, my] = pos(e); });
+  cv.addEventListener('pointerleave', () => { mx = my = -1e4; });
+}
+cv.addEventListener('pointerdown', e => {
+  const [cx, cy] = pos(e);
+  if (reduce) return;
+  for (const arr of G) for (const p of arr) {
+    const dx = p.x - cx, dy = p.y - cy, r = Math.hypot(dx, dy) || 1;
+    const f = 26 * Math.max(0.2, 1 - r / (Math.max(W, H) * 0.7)) * (0.5 + Math.random());
+    p.vx += dx / r * f; p.vy += dy / r * f;
+  }
+});
+
+let rz;
+addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(build, 150); });
+
+(document.fonts && document.fonts.load
+  ? document.fonts.load('800 100px "Bricolage Grotesque"').catch(() => {})
+  : Promise.resolve()
+).then(() => { build(); tick(); });
+</script>
+</body>
 </html>
